@@ -81,6 +81,7 @@ def encrypt_iacbc(k1, k2, r, m):
     print_time("[Encrypt] To xor")
     
 
+    # Compute the checksum with a reduce xor
     checksum = reduce(xor_block, bytes_to_blocks(m), b"")
     to_encrypt = m + checksum
     print_time("[Encrypt] Checksum")
@@ -90,9 +91,11 @@ def encrypt_iacbc(k1, k2, r, m):
     iv = AES.new(k1, AES.MODE_ECB).encrypt(r)
     print_time("[Encrypt] IV")
 
+    # Encrypt with CBC mode
     encrypted = AES.new(key=k1, iv=iv, mode=AES.MODE_CBC).encrypt(to_encrypt)
     print_time("[Encrypt] Encrypted")
 
+    # Xor the encrypted value with the shifted s values and concatenate with IV
     to_return = iv + b"".join([xor_block(bytes_to_blocks(encrypted)[i], bytes_to_blocks(to_xor)[i]) for i in range(size+1)])
     print_time("[Encrypt] To return")
 
@@ -120,21 +123,22 @@ def decrypt_iacbc(k1, k2, r, c):
     to_xor = b"\x00"*BLOCK_SIZE + b"".join([bytes_to_blocks(sis)[(i+1)%size] for i in range(size)])
     print_time("[Decrypt] To xor")
 
-
+    # Xor with the shifted s values to recover the encrypted values
     to_decrypt = b"".join([xor_block(bytes_to_blocks(c)[i], bytes_to_blocks(to_xor)[i]) for i in range(size+1)])
     print_time("[Decrypt] To decrypt")
 
-
+    # Decrypt to recover the blocks and the checksum
     decrypted = AES.new(k1, AES.MODE_CBC, iv=iv).decrypt(to_decrypt)
     print_time("[Decrypt] Decrypted")
 
-
+    # Compute the checksum 
     checksum = reduce(xor_block, [bytes_to_blocks(decrypted)[i] for i in range(size)], b"")
     print_time("[Decrypt] Checksum")
 
-
+    # Compare the computed checksum with the checksum in the data
     assert checksum == bytes_to_blocks(decrypted)[-1]
 
+    # Don't return the checksum
     to_return = b"".join(bytes_to_blocks(decrypted)[:-1])
     print_time("[Decrypt] To return")
 
