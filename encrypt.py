@@ -5,47 +5,61 @@ from Crypto.Cipher import AES
 from functools import reduce
 import time
 
-BLOCK_SIZE = 16
-KEY_SIZE = 32
-IV_SIZE = 16
-
-debug = True
-
 base_time = time.time() 
 def print_time(message = "From the beggining"):
     if print_time.printing:
         print(f"{message:20s} : {time.time() - base_time:.4f}s")
 print_time.printing = True
 
+
+# Transforms bytes to blocks so we can easily manipulate them
 def bytes_to_blocks(b):
     return [b[BLOCK_SIZE*i:BLOCK_SIZE*(i+1)] for i in range(len(b)//BLOCK_SIZE)]
 
+
+
+
+
+
+# Question 1
+BLOCK_SIZE = 16
+KEY_SIZE = 32
+IV_SIZE = 16
+
+# Question 2
 def xor_block(b1, b2):
     return (int.from_bytes(b1, 'big') ^ int.from_bytes(b2, 'big')).to_bytes(BLOCK_SIZE, 'big')
 
+# Question 3
 def incr_bloc(b):
     return (int.from_bytes(b, 'big') + 1).to_bytes(BLOCK_SIZE, 'big')
 
+# Question 4
 def pad(b):
     size = BLOCK_SIZE - len(b) % BLOCK_SIZE
     return b + size.to_bytes(1, 'big')*size
 
+# Question 5
 def unpad(b):
     size = b[-1]
     assert len(b) % BLOCK_SIZE == 0 # Checks if b is correctly padded
     assert b[-size:] == bytes([size]*size) # Checks if b is correctly padded
     return b[:-size]
 
+# Question 6
 def gen_key(pwd, iv):
     all_ = PBKDF2(pwd, salt=iv, dkLen=80, count=10000, hmac_hash_module=SHA1)
     return all_[:KEY_SIZE], all_[KEY_SIZE:2*KEY_SIZE], all_[2*KEY_SIZE:] # Divided all in three parts to recover K1, K2 and R
 
+# Question 7
 def encrypt_block(k, m):
     return AES.new(k, AES.MODE_EBC).encrypt(m)
 
+# Question 8
 def decrypt_block(k, m):
     return AES.new(k, AES.MODE_EBC).decrypt(m)
 
+# Question 9
 def encrypt_iacbc(k1, k2, r, m):
 
     # Compute the amount of block to encrypt
@@ -79,9 +93,12 @@ def encrypt_iacbc(k1, k2, r, m):
     encrypted = AES.new(key=k1, iv=iv, mode=AES.MODE_CBC).encrypt(to_encrypt)
     print_time("[Encrypt] Encrypted")
 
+    to_return = iv + b"".join([xor_block(bytes_to_blocks(encrypted)[i], bytes_to_blocks(to_xor)[i]) for i in range(size+1)])
+    print_time("[Encrypt] To return")
 
-    return iv + b"".join([xor_block(bytes_to_blocks(encrypted)[i], bytes_to_blocks(to_xor)[i]) for i in range(size+1)])
+    return to_return
 
+# Question 10
 def decrypt_iacbc(k1, k2, r, c):
 
     # Separate the IV and the ciphertext
@@ -117,23 +134,32 @@ def decrypt_iacbc(k1, k2, r, c):
 
 
     assert checksum == bytes_to_blocks(decrypted)[-1]
-    return b"".join(bytes_to_blocks(decrypted)[:-1])
 
+    to_return = b"".join(bytes_to_blocks(decrypted)[:-1])
+    print_time("[Decrypt] To return")
+
+
+    return to_return
+
+# Question 11
 def encrypt(pwd, iv, m):
     k1, k2, r = gen_key(pwd, iv)
     return encrypt_iacbc(k1, k2, r, pad(m))
 
+# Question 12
 def decrypt(pwd, iv, c):
     k1, k2, r = gen_key(pwd, iv)
     return unpad(decrypt_iacbc(k1, k2, r, c))
 
+
+# Question 13
 class Params:
-    def __init__(self, enc, pwd, iv, input, output):
+    def __init__(self, enc, pwd, iv, input, out):
         self.enc = enc
         self.pwd = pwd
         self.iv = iv
         self.input = input
-        self.output = output
+        self.out = out
 
 def run(params):
     with open(params.input, "rb") as f:
@@ -142,13 +168,12 @@ def run(params):
         while read != b"":
             content += read
             read = f.read()
-        # print(content)
 
     if params.enc:
         to_write = encrypt(params.pwd, params.iv, content)
     else:
         to_write = decrypt(params.pwd, params.iv, content)
 
-    with open(params.output, "wb") as f:
+    with open(params.out, "wb") as f:
         f.write(to_write)
 
